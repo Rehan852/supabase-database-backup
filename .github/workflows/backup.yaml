@@ -5,12 +5,16 @@ on:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+  # This enables the manual button
   workflow_dispatch:
+    inputs:
+      force_run:
+        description: 'Force backup execution'
+        required: true
+        default: true
+        type: boolean
   schedule:
     - cron: "0 0 * * *" # Runs every day at midnight
-
-env:
-  BACKUP_ENABLED: true
 
 jobs:
   run_db_backup:
@@ -19,12 +23,20 @@ jobs:
       contents: write
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      BACKUP_ENABLED: ${{ vars.BACKUP_ENABLED }} # Repository variable (true or false)
+      # FIXED LOGIC: 
+      # This creates a strict 'true' or 'false' string based on:
+      # 1. Is it a manual run with "Force Run" checked? OR
+      # 2. Is the Repository Variable BACKUP_ENABLED set to 'true'?
+      BACKUP_ENABLED: ${{ (github.event_name == 'workflow_dispatch' && inputs.force_run) || vars.BACKUP_ENABLED == 'true' }}
+
     steps:
       - name: Check if backups are enabled
         run: |
+          echo "Trigger event: ${{ github.event_name }}"
+          echo "Backup Enabled Status: $BACKUP_ENABLED"
+          
           if [ "$BACKUP_ENABLED" != "true" ]; then
-            echo "Backups are disabled. Exiting workflow."
+            echo "Backups are disabled. Exiting cleanly."
             exit 0
           fi
 
