@@ -52,12 +52,23 @@ jobs:
 
       - name: Export roles
         if: env.EXPORT_ENABLED == 'true'
+        # This is correct, --role-only is a valid Supabase CLI flag
         run: supabase db dump --db-url "$SUPABASE_DB_URL" -f supabase/template/roles.sql --role-only
 
+      - name: Install pg_dump client
+        if: env.EXPORT_ENABLED == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          
       - name: Export structure (Schema-Only)
         if: env.EXPORT_ENABLED == 'true'
-        # This is the key change: --schema-only exports the blueprint *without* data
-        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f supabase/template/structure.sql --schema-only
+        # We must use pg_dump directly, as Supabase CLI wrapper has no --schema-only flag
+        # We add --no-owner and --no-privileges to make the template reusable
+        run: |
+          echo "Exporting schema-only from database..."
+          pg_dump --schema-only --quote-all-identifiers --no-owner --no-privileges -d "$SUPABASE_DB_URL" > supabase/template/structure.sql
+          echo "Structure export complete."
 
       - name: Commit project structure
         if: env.EXPORT_ENABLED == 'true'
