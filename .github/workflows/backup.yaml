@@ -77,9 +77,9 @@ jobs:
         # We add --no-owner and --no-privileges to make the template reusable
         run: |
           echo "Exporting schema-only from database..."
-          # The binary might be version-suffixed, so we check /usr/lib/postgresql/17/bin/pg_dump
-          # but typically it's added to the path. We'll rely on the default path first.
-          pg_dump --schema-only --quote-all-identifiers --no-owner --no-privileges -d "$SUPABASE_DB_URL" > supabase/template/structure.sql
+          # FIX: Use the full, explicit path to the pg_dump v17 binary
+          # This bypasses the system's default v16
+          /usr/lib/postgresql/17/bin/pg_dump --schema-only --quote-all-identifiers --no-owner --no-privileges -d "$SUPABASE_DB_URL" > supabase/template/structure.sql
           echo "Structure export complete."
 
       - name: Commit project structure
