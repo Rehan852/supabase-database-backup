@@ -55,11 +55,21 @@ jobs:
         # This is correct, --role-only is a valid Supabase CLI flag
         run: supabase db dump --db-url "$SUPABASE_DB_URL" -f supabase/template/roles.sql --role-only
 
-      - name: Install pg_dump client
+      - name: Install pg_dump client (Version 17)
         if: env.EXPORT_ENABLED == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          # Install prerequisites to add a new repository
+          sudo apt-get install -y lsb-release wget ca-certificates
+          # Create the file repository configuration:
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          # Import the repository signing key:
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          # Update the package lists:
+          sudo apt-get update
+          # Install the specific client version that matches your server:
+          echo "Installing postgresql-client-17..."
+          sudo apt-get install -y postgresql-client-17
           
       - name: Export structure (Schema-Only)
         if: env.EXPORT_ENABLED == 'true'
@@ -67,6 +77,8 @@ jobs:
         # We add --no-owner and --no-privileges to make the template reusable
         run: |
           echo "Exporting schema-only from database..."
+          # The binary might be version-suffixed, so we check /usr/lib/postgresql/17/bin/pg_dump
+          # but typically it's added to the path. We'll rely on the default path first.
           pg_dump --schema-only --quote-all-identifiers --no-owner --no-privileges -d "$SUPABASE_DB_URL" > supabase/template/structure.sql
           echo "Structure export complete."
 
