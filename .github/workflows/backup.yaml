@@ -1,73 +1,71 @@
-name: supabase-backup
+name: Supabase Structure Export
 
 on:
   push:
-    branches: [main, dev]
-  pull_request:
-    branches: [main, dev]
-  # This enables the manual button
+    branches: [main] # Good to run this only on main
   workflow_dispatch:
     inputs:
       force_run:
-        description: 'Force backup execution'
+        description: 'Force export execution'
         required: true
         default: true
         type: boolean
-  schedule:
-    - cron: "0 0 * * *" # Runs every day at midnight
 
 jobs:
-  run_db_backup:
+  export_project_structure:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
+      # ***IMPORTANT***
+      # Use the "Session Pooler" (Port 5432) connection string here
+      # It must be IPv4 compatible
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      # FIXED LOGIC: 
-      # This creates a strict 'true' or 'false' string based on:
-      # 1. Is it a manual run with "Force Run" checked? OR
-      # 2. Is the Repository Variable BACKUP_ENABLED set to 'true'?
-      BACKUP_ENABLED: ${{ (github.event_name == 'workflow_dispatch' && inputs.force_run) || vars.BACKUP_ENABLED == 'true' }}
+      
+      # Use the same logic as before to enable/disable
+      EXPORT_ENABLED: ${{ (github.event_name == 'workflow_dispatch' && inputs.force_run) || vars.EXPORT_ENABLED == 'true' }}
 
     steps:
-      - name: Check if backups are enabled
+      - name: Check if exports are enabled
         run: |
           echo "Trigger event: ${{ github.event_name }}"
-          echo "Backup Enabled Status: $BACKUP_ENABLED"
+          echo "Export Enabled Status: $EXPORT_ENABLED"
           
-          if [ "$BACKUP_ENABLED" != "true" ]; then
-            echo "Backups are disabled. Exiting cleanly."
+          if [ "$EXPORT_ENABLED" != "true" ]; then
+            echo "Exports are disabled. Exiting cleanly."
             exit 0
           fi
 
       - name: Checkout repository
-        if: env.BACKUP_ENABLED == 'true'
+        if: env.EXPORT_ENABLED == 'true'
         uses: actions/checkout@v3
 
       - name: Setup Supabase CLI
-        if: env.BACKUP_ENABLED == 'true'
+        if: env.EXPORT_ENABLED == 'true'
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Create timestamp folder
-        if: env.BACKUP_ENABLED == 'true'
-        run: mkdir -p prisma/backups
+      - name: Create export folder
+        if: env.EXPORT_ENABLED == 'true'
+        run: mkdir -p supabase/template
 
-      - name: Backup roles
-        if: env.BACKUP_ENABLED == 'true'
-        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f prisma/backups/roles.sql --role-only
+      - name: Export roles
+        if: env.EXPORT_ENABLED == 'true'
+        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f supabase/template/roles.sql --role-only
 
-      - name: Backup schema
-        if: env.BACKUP_ENABLED == 'true'
-        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f prisma/backups/schema.sql
+      - name: Export structure (Schema-Only)
+        if: env.EXPORT_ENABLED == 'true'
+        # This is the key change: --schema-only exports the blueprint *without* data
+        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f supabase/template/structure.sql --schema-only
 
-      - name: Backup data
-        if: env.BACKUP_ENABLED == 'true'
-        run: supabase db dump --db-url "$SUPABASE_DB_URL" -f prisma/backups/data.sql --data-only --use-copy
-
-      - name: Commit backups
-        if: env.BACKUP_ENABLED == 'true'
+      - name: Commit project structure
+        if: env.EXPORT_ENABLED == 'true'
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: Supabase backup
+          commit_message: "chore: Export Supabase project structure"
+          # Commit to the 'supabase/template' directory
+          file_pattern: "supabase/template/*.sql"
+          repository: .
+          commit_user_name: GitHub Actions
+          commit_user_email: actions@github.com
